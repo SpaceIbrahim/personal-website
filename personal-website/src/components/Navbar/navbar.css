@@ -1,0 +1,48 @@
+.navbar {
+    height: 5rem;
+    width: 100vw;
+    max-width: 75rem;
+    margin:0 auto;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.nav-logo {
+    object-fit: cover;
+    height: 3rem;
+    width: 4rem;
+}
+
+.nav-item {
+    margin: 1rem;
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    color: rgb(228, 224, 32);
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgb(228, 224, 32);
+}
+
+.nav-contact {
+    background: white;
+    color: rgb(30, 30, 30);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+}
+
+.nav-contact-img {
+    object-fit: cover;
+    height: 1.5rem;
+    width: 1.5rem;
+    margin-right: 0.5rem;
+}
