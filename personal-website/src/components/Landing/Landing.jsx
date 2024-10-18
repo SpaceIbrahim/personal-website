@@ -2,6 +2,8 @@ import React from "react";
 import "./landing.css";
 import ibrahim from "../../assets/ibrahim.png";
 import { Link } from "react-scroll";
+import { FaFacebook, FaTwitter, FaFileAlt } from "react-icons/fa";
+import { TiSocialInstagram, TiSocialLinkedin } from "react-icons/ti";
 
 const Landing = () => {
   return (
@@ -20,15 +22,30 @@ const Landing = () => {
             esse consequatur incidunt?
           </p>
           
-          <Link>
+          <Link to="resume" smooth={true} duration={500}>
             <button className="btn btn-resume">
-              <i className="fas fa-file-alt"></i> View Resume
+              <FaFileAlt /> View Resume
             </button>
           </Link>
         </div>
         <div className="intro-image-container">
-          <img src={ibrahim} alt="Muhammad Ibrahim" className="intro-image" />
-        </div>
+  <img src={ibrahim} alt="Muhammad Ibrahim" className="intro-image" />
+  <div className="intro-image-circle"></div>
+  <div className="social-links">
+    <a href="#" aria-label="Facebook">
+      <FaFacebook />
+    </a>
+    <a href="#" aria-label="Twitter">
+      <FaTwitter />
+    </a>
+    <a href="#" aria-label="LinkedIn">
+      <TiSocialLinkedin />
+    </a>
+    <a href="#" aria-label="Instagram">
+      <TiSocialInstagram />
+    </a>
+  </div>
+</div>
       </div>
     </section>
   );
