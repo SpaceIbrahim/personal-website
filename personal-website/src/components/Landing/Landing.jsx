@@ -1,4 +1,3 @@
-import React from "react";
 import "./landing.css";
 import ibrahim from "../../assets/ibrahim.png";
 import { Link } from "react-scroll";
@@ -7,12 +6,12 @@ import { TiSocialInstagram, TiSocialLinkedin } from "react-icons/ti";
 
 const Landing = () => {
   return (
-    <section className="intro">
+    <section className="intro" id="home">
       <div className="intro-content">
         <div className="intro-text">
           <span className="intro-hello">Hello,</span>
           <h1 className="intro-title">
-            I'm <span className="intro-name">Muhammad Ibrahim</span>
+            I&apos;m <span className="intro-name">Muhammad Ibrahim</span>
           </h1>
           <h2 className="intro-subtitle">Computer Engineer</h2>
           <p className="intro-para">
@@ -36,7 +35,7 @@ const Landing = () => {
               { icon: FaTwitter, label: "Twitter", href: "#" },
               { icon: TiSocialLinkedin, label: "LinkedIn", href: "#" },
               { icon: TiSocialInstagram, label: "Instagram", href: "#" },
-            ].map((social, index) => (
+            ].map((social) => (
               <a 
                 key={social.label}
                 href={social.href}

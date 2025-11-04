@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link } from 'react-scroll'
 import './navbar.css'
 const Navbar = () => {
@@ -9,7 +8,7 @@ const Navbar = () => {
           <Link className="nav-item">Home</Link>
           <Link className="nav-item">About</Link>
           <Link className="nav-item">Projects</Link>
-          {/* <Link className="nav-item">Map</Link> */}
+          <Link className="nav-item">Map</Link>
         </div>
 
         <button className="nav-contact">
