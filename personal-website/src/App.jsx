@@ -1,14 +1,15 @@
-import React from 'react'
 import Navbar from './components/Navbar/Navbar'
 import Landing from './components/Landing/Landing'
+import ProjectPage from './components/Projects/ProjectPage'
 
-const App = () => {
-  return (
-    <div>
-    <Navbar></Navbar>
-    <Landing></Landing>
-    </div>
-  )
-}
+const App = () => (
+  <>
+    <Navbar />
+    <main>
+      <Landing />
+      <ProjectPage />
+    </main>
+  </>
+)
 
 export default App
