@@ -163,6 +163,90 @@
 .social-links a:nth-child(3) { right: -9%; top: 42%; }
 .social-links a:nth-child(4) { right: -1%; top: 68%; }
 
+.resume-modal__overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    z-index: 1000;
+}
+
+.resume-modal {
+    position: relative;
+    width: min(900px, 100%);
+    height: 90vh; /* increased from max-height to fixed proportional height */
+    max-height: 90vh;
+    background: #101010;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 215, 0, 0.25);
+    box-shadow: 0 24px 65px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.resume-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.15);
+}
+
+.resume-modal__header h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    color: #ffd700;
+}
+
+.resume-modal__close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.resume-modal__close:hover {
+    color: #ffd700;
+}
+
+.resume-modal__iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+}
+
+.resume-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(255, 215, 0, 0.15);
+    background: rgba(12, 12, 12, 0.85);
+}
+
+.resume-modal__download {
+    color: #ffd700;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid rgba(255, 215, 0, 0.35);
+    padding: 0.55rem 1.4rem;
+    border-radius: 999px;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.resume-modal__download:hover {
+    background: #ffd700;
+    color: #111;
+    border-color: rgba(255, 215, 0, 0.6);
+}
+
 @media (max-width: 768px) {
     .intro-content {
         flex-direction: column-reverse;
@@ -177,6 +261,17 @@
     .intro-image-container {
         width: 100%;
         max-width: 300px;
+    }
+
+    .resume-modal {
+        width: 100%;
+        max-height: 85vh;
+    }
+
+    .resume-modal__header,
+    .resume-modal__footer {
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 
     .social-links a {
