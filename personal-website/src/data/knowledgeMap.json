@@ -1,0 +1,102 @@
+{
+  "topics": [
+    {
+      "id": "math",
+      "label": "Mathematics",
+      "summary": "Foundation of quantitative reasoning, algorithms, and modeling.",
+      "position": { "x": 0, "y": 0 },
+      "detail": {
+        "overview": "Mathematics underpins problem solving across engineering and science. Focus areas include linear algebra, calculus, discrete math, and statistics.",
+        "deepDives": [
+          "Applied calculus for optimization and control systems",
+          "Matrix decompositions in machine learning pipelines",
+          "Graph theory powering network analysis and routing"
+        ],
+        "resources": [
+          { "label": "MIT OpenCourseWare", "href": "https://ocw.mit.edu" },
+          { "label": "Brilliant.org", "href": "https://brilliant.org" }
+        ]
+      }
+    },
+    {
+      "id": "physics",
+      "label": "Physics",
+      "summary": "Explains natural phenomena, instrumentation, and simulations.",
+      "position": { "x": 140, "y": 120 },
+      "detail": {
+        "overview": "Physics connects theory with real-world systems. Emphasis on electromagnetics, mechanics, and computational modeling.",
+        "deepDives": [
+          "Electromagnetic field analysis for antenna design",
+          "Mechanical system modeling with differential equations",
+          "Monte Carlo simulations for experimental planning"
+        ],
+        "resources": [
+          { "label": "The Feynman Lectures", "href": "https://www.feynmanlectures.caltech.edu" },
+          { "label": "HyperPhysics", "href": "http://hyperphysics.phy-astr.gsu.edu" }
+        ]
+      }
+    },
+    {
+      "id": "cs",
+      "label": "Computer Science",
+      "summary": "Software architecture, data structures, and distributed systems.",
+      "position": { "x": -160, "y": 160 },
+      "detail": {
+        "overview": "Focus on building scalable, reliable systems. Topics include algorithms, concurrency, and systems programming.",
+        "deepDives": [
+          "Designing APIs with domain-driven design principles",
+          "Concurrency primitives and lock-free data structures",
+          "Distributed tracing to debug microservices"
+        ],
+        "resources": [
+          { "label": "CS 61B Data Structures", "href": "https://sp21.datastructur.es" },
+          { "label": "System Design Primer", "href": "https://github.com/donnemartin/system-design-primer" }
+        ]
+      }
+    },
+    {
+      "id": "embedded",
+      "label": "Embedded Systems",
+      "summary": "Hardware/software co-design with real-time constraints.",
+      "position": { "x": -260, "y": -80 },
+      "detail": {
+        "overview": "Embedded development bridges electronics with firmware. Concentrate on microcontroller programming, hardware interfaces, and RTOS patterns.",
+        "deepDives": [
+          "Interrupt-driven design for deterministic response",
+          "Low-power optimization for battery-first products",
+          "I2C/SPI peripheral integration and debugging"
+        ],
+        "resources": [
+          { "label": "Embedded Artistry", "href": "https://embeddedartistry.com" },
+          { "label": "FreeRTOS Docs", "href": "https://www.freertos.org" }
+        ]
+      }
+    },
+    {
+      "id": "ai",
+      "label": "Applied AI",
+      "summary": "Bringing machine learning models into production.",
+      "position": { "x": 220, "y": -140 },
+      "detail": {
+        "overview": "Covers the lifecycle from dataset curation to deployment. Focus on model evaluation, MLOps, and interpretability.",
+        "deepDives": [
+          "Feature store design for consistent online/offline data",
+          "Monitoring drift with statistical quality metrics",
+          "Responsible AI: bias audits and human-in-the-loop review"
+        ],
+        "resources": [
+          { "label": "Made With ML", "href": "https://madewithml.com" },
+          { "label": "Full Stack Deep Learning", "href": "https://fullstackdeeplearning.com" }
+        ]
+      }
+    }
+  ],
+  "links": [
+    { "source": "math", "target": "physics" },
+    { "source": "math", "target": "cs" },
+    { "source": "physics", "target": "embedded" },
+    { "source": "cs", "target": "embedded" },
+    { "source": "cs", "target": "ai" },
+    { "source": "math", "target": "ai" }
+  ]
+}

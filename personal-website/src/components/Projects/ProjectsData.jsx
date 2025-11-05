@@ -76,6 +76,101 @@ export const projects = [
       { label: "Design Files", href: "#" },
     ],
   },
+  {
+    id: "campus-nav",
+    title: "Campus Navigator",
+    headline: "Mobile-first progressive web app that guides students across campus.",
+    mainImage: createPlaceholder(960, 540, "Campus Map", ["#134e30", "#243b55"]),
+    thumbnail: createPlaceholder(260, 260, "Route Planner", ["#ffd700", "#f7971e"]),
+    description:
+      "Built around offline-first principles to keep navigation available even when cell service is spotty between buildings.",
+    highlights: [
+      "Turn-by-turn guidance with accessible voice cues and haptics",
+      "Crowdsourced accessibility notes for elevators, ramps, and obstacles",
+      "App shell caching that keeps core features working offline",
+    ],
+    tech: ["React", "Leaflet", "Workbox", "Mapbox"],
+    links: [
+      { label: "Download Prototype", href: "#" },
+      { label: "Design Files", href: "#" },
+    ],
+  },
+  {
+    id: "campus-nav",
+    title: "Campus Navigator",
+    headline: "Mobile-first progressive web app that guides students across campus.",
+    mainImage: createPlaceholder(960, 540, "Campus Map", ["#134e30", "#243b55"]),
+    thumbnail: createPlaceholder(260, 260, "Route Planner", ["#ffd700", "#f7971e"]),
+    description:
+      "Built around offline-first principles to keep navigation available even when cell service is spotty between buildings.",
+    highlights: [
+      "Turn-by-turn guidance with accessible voice cues and haptics",
+      "Crowdsourced accessibility notes for elevators, ramps, and obstacles",
+      "App shell caching that keeps core features working offline",
+    ],
+    tech: ["React", "Leaflet", "Workbox", "Mapbox"],
+    links: [
+      { label: "Download Prototype", href: "#" },
+      { label: "Design Files", href: "#" },
+    ],
+  },
+  {
+    id: "campus-nav",
+    title: "Campus Navigator",
+    headline: "Mobile-first progressive web app that guides students across campus.",
+    mainImage: createPlaceholder(960, 540, "Campus Map", ["#134e30", "#243b55"]),
+    thumbnail: createPlaceholder(260, 260, "Route Planner", ["#ffd700", "#f7971e"]),
+    description:
+      "Built around offline-first principles to keep navigation available even when cell service is spotty between buildings.",
+    highlights: [
+      "Turn-by-turn guidance with accessible voice cues and haptics",
+      "Crowdsourced accessibility notes for elevators, ramps, and obstacles",
+      "App shell caching that keeps core features working offline",
+    ],
+    tech: ["React", "Leaflet", "Workbox", "Mapbox"],
+    links: [
+      { label: "Download Prototype", href: "#" },
+      { label: "Design Files", href: "#" },
+    ],
+  },
+  {
+    id: "campus-nav",
+    title: "Campus Navigator",
+    headline: "Mobile-first progressive web app that guides students across campus.",
+    mainImage: createPlaceholder(960, 540, "Campus Map", ["#134e30", "#243b55"]),
+    thumbnail: createPlaceholder(260, 260, "Route Planner", ["#ffd700", "#f7971e"]),
+    description:
+      "Built around offline-first principles to keep navigation available even when cell service is spotty between buildings.",
+    highlights: [
+      "Turn-by-turn guidance with accessible voice cues and haptics",
+      "Crowdsourced accessibility notes for elevators, ramps, and obstacles",
+      "App shell caching that keeps core features working offline",
+    ],
+    tech: ["React", "Leaflet", "Workbox", "Mapbox"],
+    links: [
+      { label: "Download Prototype", href: "#" },
+      { label: "Design Files", href: "#" },
+    ],
+  },
+  {
+    id: "campus-nav",
+    title: "Campus Navigator",
+    headline: "Mobile-first progressive web app that guides students across campus.",
+    mainImage: createPlaceholder(960, 540, "Campus Map", ["#134e30", "#243b55"]),
+    thumbnail: createPlaceholder(260, 260, "Route Planner", ["#ffd700", "#f7971e"]),
+    description:
+      "Built around offline-first principles to keep navigation available even when cell service is spotty between buildings.",
+    highlights: [
+      "Turn-by-turn guidance with accessible voice cues and haptics",
+      "Crowdsourced accessibility notes for elevators, ramps, and obstacles",
+      "App shell caching that keeps core features working offline",
+    ],
+    tech: ["React", "Leaflet", "Workbox", "Mapbox"],
+    links: [
+      { label: "Download Prototype", href: "#" },
+      { label: "Design Files", href: "#" },
+    ],
+  },
 ];
 
 export default projects;
