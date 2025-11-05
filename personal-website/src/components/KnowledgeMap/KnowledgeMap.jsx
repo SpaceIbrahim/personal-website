@@ -9,14 +9,7 @@ const STRETCH_BAND = 100;
 const FOLLOW_FACTOR = 0.45;
 const MIN_NODE_DISTANCE = 190;
 
-
-const computeIdleDelay = (id) => {
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    hash = (hash * 31 + id.charCodeAt(i)) % 1024;
-  }
-  return (hash % 10) / 10;
-};
+/* ---------------- Utilities ---------------- */
 
 const normalizeTopic = (topic) => {
   if (!topic) return topic;
@@ -49,22 +42,32 @@ const cloneTopics = (topics) =>
 
 const buildLookup = (topics) => {
   const lookup = new Map();
-  topics.forEach((topic) => {
-    lookup.set(topic.id, topic);
-  });
+  topics.forEach((topic) => lookup.set(topic.id, topic));
   return lookup;
 };
 
 const buildIndex = (topics) => {
   const index = new Map();
-  topics.forEach((topic, idx) => {
-    index.set(topic.id, idx);
-  });
+  topics.forEach((topic, idx) => index.set(topic.id, idx));
   return index;
 };
 
+const buildAdjacency = (links) => {
+  const adjacency = new Map();
+  links.forEach((link) => {
+    if (!adjacency.has(link.source)) adjacency.set(link.source, []);
+    if (!adjacency.has(link.target)) adjacency.set(link.target, []);
+    adjacency.get(link.source).push(link);
+    adjacency.get(link.target).push(link);
+  });
+  return adjacency;
+};
+
+const clampWithinCanvas = (value) => Math.max(-CANVAS_EXTENT, Math.min(CANVAS_EXTENT, value));
+
+/* Compute a straight line path between two nodes with optional lane spacing. */
 const computeLinkPath = (link, lookup, options = {}) => {
-  const { laneSpacing = 1, wiggle = 0 } = options;
+  const { laneSpacing = 1 } = options;
   const source = lookup.get(link.source);
   const target = lookup.get(link.target);
   if (!source || !target) return null;
@@ -79,8 +82,9 @@ const computeLinkPath = (link, lookup, options = {}) => {
   const distance = Math.hypot(dx, dy) || 1;
   const normalX = -dy / distance;
   const normalY = dx / distance;
+
   const baseOffset = link.laneCount > 1 ? (link.laneIndex - (link.laneCount - 1) / 2) * 18 : 0;
-  const laneOffset = baseOffset * laneSpacing + wiggle;
+  const laneOffset = baseOffset * laneSpacing;
 
   const offsetX = normalX * laneOffset;
   const offsetY = normalY * laneOffset;
@@ -97,32 +101,34 @@ const computePaths = (topics, links, laneSpacing = 1) => {
   const lookup = buildLookup(topics);
   return links
     .map((link) => {
-      const path = computeLinkPath(link, lookup, { laneSpacing, wiggle: 0 });
+      const path = computeLinkPath(link, lookup, { laneSpacing });
       if (!path) return null;
       return { ...link, path };
     })
     .filter(Boolean);
 };
 
-const buildAdjacency = (links) => {
-  const adjacency = new Map();
-  links.forEach((link) => {
-    if (!adjacency.has(link.source)) adjacency.set(link.source, []);
-    if (!adjacency.has(link.target)) adjacency.set(link.target, []);
-    adjacency.get(link.source).push(link);
-    adjacency.get(link.target).push(link);
-  });
-  return adjacency;
-};
+/* ---------------- Component ---------------- */
 
 const KnowledgeMap = () => {
+  /* --- Refs FIRST (so nothing uses them before init) --- */
   const mapRootRef = useRef(null);
   const viewportRef = useRef(null);
   const pointerIdRef = useRef(null);
 
+  const topicsRef = useRef([]);
+  const lookupRef = useRef(new Map());
+  const indexRef = useRef(new Map());
+  const nodeRefs = useRef(new Map());
+  const linkRefs = useRef(new Map());
+  const stretchStateRef = useRef(new Map());
+  const isDraggingRef = useRef(false);
+  const zoomRef = useRef(1);
+
+  /* --- Derived data --- */
   const initialTopics = useMemo(
     () => cloneTopics((mapData.topics || []).map(normalizeTopic)),
-    [],
+    []
   );
 
   const linkDefs = useMemo(() => {
@@ -150,17 +156,14 @@ const KnowledgeMap = () => {
     });
 
     ordered.sort((a, b) => a.rawIndex - b.rawIndex);
-    return ordered.map((link) => {
-      const rest = { ...link };
-      delete rest.rawIndex;
-      return rest;
-    });
+    return ordered.map(({ rawIndex, ...rest }) => rest);
   }, []);
 
   const adjacency = useMemo(() => buildAdjacency(linkDefs), [linkDefs]);
 
+  /* --- State --- */
   const [topics, setTopics] = useState(initialTopics);
-  const [paths, setPaths] = useState(() => computePaths(initialTopics, linkDefs));
+  const [paths, setPaths] = useState(() => computePaths(initialTopics, linkDefs, 1));
   const [activeTopic, setActiveTopic] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
@@ -168,44 +171,19 @@ const KnowledgeMap = () => {
   const [zoom, setZoom] = useState(1);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const topicsRef = useRef(cloneTopics(initialTopics));
-  const lookupRef = useRef(buildLookup(topicsRef.current));
-  const indexRef = useRef(buildIndex(topicsRef.current));
-  const nodeRefs = useRef(new Map());
-  const linkRefs = useRef(new Map());
-  const stretchStateRef = useRef(new Map());
-  const isDraggingRef = useRef(false);
-
-useEffect(() => {
-  const cloned = cloneTopics(topics);
-  topicsRef.current = cloned;
-  lookupRef.current = buildLookup(cloned);
-  indexRef.current = buildIndex(cloned);
-}, [topics]);
+  /* Keep refs in sync with state */
+  useEffect(() => {
+    const cloned = cloneTopics(topics);
+    topicsRef.current = cloned;
+    lookupRef.current = buildLookup(cloned);
+    indexRef.current = buildIndex(cloned);
+  }, [topics]);
 
   useEffect(() => {
-    let frameId;
-    const tick = () => {
-      const time = performance.now() / 1000;
-      nodeRefs.current.forEach((node, id) => {
-        if (!node) return;
-        if (isDraggingRef.current && node.classList.contains("knowledge-node--dragging")) {
-          node.style.setProperty("--idle-x", "0px");
-          node.style.setProperty("--idle-y", "0px");
-          return;
-        }
-        const base = computeIdleDelay(id);
-        const offsetX = Math.sin(time * 0.6 + base * 2 * Math.PI) * 6;
-        const offsetY = Math.cos(time * 0.8 + base * 2 * Math.PI) * 4;
-        node.style.setProperty("--idle-x", `${offsetX.toFixed(2)}px`);
-        node.style.setProperty("--idle-y", `${offsetY.toFixed(2)}px`);
-      });
-      frameId = requestAnimationFrame(tick);
-    };
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, []);
+    zoomRef.current = zoom;
+  }, [zoom]);
 
+  /* Center initial view */
   useLayoutEffect(() => {
     if (isInitialized || !viewportRef.current) return;
     const rect = viewportRef.current.getBoundingClientRect();
@@ -213,6 +191,7 @@ useEffect(() => {
     setIsInitialized(true);
   }, [isInitialized]);
 
+  /* Zoom with mouse wheel (cursor-centered zoom) */
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -242,6 +221,24 @@ useEffect(() => {
     return () => viewport.removeEventListener("wheel", handleWheel);
   }, [offset, zoom]);
 
+  /* Modal focus/escape + page scroll lock */
+  useEffect(() => {
+    if (!activeTopic) {
+      document.body.style.overflow = "";
+      return undefined;
+    }
+    document.body.style.overflow = "hidden";
+    const handleEsc = (event) => {
+      if (event.key === "Escape") setActiveTopic(null);
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => {
+      window.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [activeTopic]);
+
+  /* --- Panning handlers --- */
   const handlePointerDown = (event) => {
     if (event.button !== 0) return;
     if (event.target.closest(".knowledge-node")) return;
@@ -272,28 +269,13 @@ useEffect(() => {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
-  useEffect(() => {
-    if (!activeTopic) {
-      document.body.style.overflow = "";
-      return undefined;
-    }
-    document.body.style.overflow = "hidden";
-    const handleEsc = (event) => {
-      if (event.key === "Escape") setActiveTopic(null);
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => {
-      window.removeEventListener("keydown", handleEsc);
-      document.body.style.overflow = "";
-    };
-  }, [activeTopic]);
-
-  const handleTopicClick = (topic) => {
-    setActiveTopic(topic);
-  };
+  /* --- Topic / link helpers --- */
+  const handleTopicClick = (topic) => setActiveTopic(topic);
 
   const updateStretchStyles = (activeMap) => {
     const prev = stretchStateRef.current;
+
+    // Remove no-longer-stretched
     prev.forEach((_, id) => {
       if (!activeMap.has(id)) {
         const el = linkRefs.current.get(id);
@@ -304,6 +286,7 @@ useEffect(() => {
       }
     });
 
+    // Apply current stretch
     activeMap.forEach((ratio, id) => {
       const el = linkRefs.current.get(id);
       if (el) {
@@ -319,22 +302,12 @@ useEffect(() => {
     const nodeEl = nodeRefs.current.get(topicId);
     if (nodeEl) {
       nodeEl.classList.toggle("knowledge-node--dragging", active);
-      if (active) {
-        nodeEl.style.setProperty("--idle-x", "0px");
-        nodeEl.style.setProperty("--idle-y", "0px");
-      }
       if (pointerId != null) {
-        if (active) {
-          nodeEl.setPointerCapture?.(pointerId);
-        } else {
-          nodeEl.releasePointerCapture?.(pointerId);
-        }
+        if (active) nodeEl.setPointerCapture?.(pointerId);
+        else nodeEl.releasePointerCapture?.(pointerId);
       }
     }
-
-    if (target && !active) {
-      target.releasePointerCapture?.(pointerId);
-    }
+    if (target && !active) target.releasePointerCapture?.(pointerId);
 
     mapRootRef.current?.classList.toggle("knowledge-map--dragging", active);
     isDraggingRef.current = active;
@@ -349,175 +322,168 @@ useEffect(() => {
     if (nodeEl) {
       nodeEl.style.left = `${topic.position.x}px`;
       nodeEl.style.top = `${topic.position.y}px`;
-      if (!isDraggingRef.current) {
-        nodeEl.style.setProperty("--idle-x", nodeEl.style.getPropertyValue("--idle-x") || "0px");
-        nodeEl.style.setProperty("--idle-y", nodeEl.style.getPropertyValue("--idle-y") || "0px");
-      }
     }
 
     const connected = adjacency.get(topicId) || [];
     connected.forEach((link) => {
       const pathEl = linkRefs.current.get(link.id);
       if (!pathEl) return;
-      const path = computeLinkPath(link, lookupRef.current);
-      if (path) {
-        pathEl.setAttribute("d", path);
-      }
+      const path = computeLinkPath(link, lookupRef.current, { laneSpacing: 1 });
+      if (path) pathEl.setAttribute("d", path);
     });
   };
 
-const pullConnected = (rootId) => {
-  const visited = new Set([rootId]);
-  const queue = [rootId];
-  const processedLinks = new Set();
-  const moved = new Set();
+  const pullConnected = (rootId) => {
+    const visited = new Set([rootId]);
+    const queue = [rootId];
+    const processedLinks = new Set();
+    const moved = new Set();
 
-  while (queue.length > 0) {
-    const currentId = queue.shift();
-    const current = lookupRef.current.get(currentId);
-    if (!current) continue;
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      const current = lookupRef.current.get(currentId);
+      if (!current) continue;
 
-    const neighbors = adjacency.get(currentId) || [];
-    neighbors.forEach((link) => {
-      if (processedLinks.has(link.id)) return;
-      processedLinks.add(link.id);
+      const neighbors = adjacency.get(currentId) || [];
+      neighbors.forEach((link) => {
+        if (processedLinks.has(link.id)) return;
+        processedLinks.add(link.id);
 
-      const neighborId = link.source === currentId ? link.target : link.source;
-      const neighborIndex = indexRef.current.get(neighborId);
-      const neighbor = neighborIndex !== undefined ? lookupRef.current.get(neighborId) : null;
-      if (!neighbor) return;
+        const neighborId = link.source === currentId ? link.target : link.source;
+        const neighborIndex = indexRef.current.get(neighborId);
+        const neighbor = neighborIndex !== undefined ? lookupRef.current.get(neighborId) : null;
+        if (!neighbor) return;
 
-      const dx = current.position.x - neighbor.position.x;
-      const dy = current.position.y - neighbor.position.y;
-      const distance = Math.hypot(dx, dy) || 1;
+        const dx = current.position.x - neighbor.position.x;
+        const dy = current.position.y - neighbor.position.y;
+        const distance = Math.hypot(dx, dy) || 1;
 
+        if (distance > MAX_LINK_LENGTH) {
+          const excess = distance - MAX_LINK_LENGTH;
+          const pull = Math.min(excess, STRETCH_BAND) * FOLLOW_FACTOR;
+          const directionX = dx / distance;
+          const directionY = dy / distance;
+
+          neighbor.position = {
+            x: clampWithinCanvas(neighbor.position.x + directionX * pull),
+            y: clampWithinCanvas(neighbor.position.y + directionY * pull),
+          };
+
+          lookupRef.current.set(neighborId, neighbor);
+          topicsRef.current[neighborIndex] = neighbor;
+          updateVisualForTopic(neighborId);
+          moved.add(neighborId);
+
+          if (!visited.has(neighborId)) {
+            visited.add(neighborId);
+            queue.push(neighborId);
+          }
+        }
+      });
+    }
+
+    return moved;
+  };
+
+  const resolveCollisions = (originIds) => {
+    if (!originIds || originIds.size === 0) return new Set();
+
+    const queue = Array.from(originIds);
+    const processed = new Set(queue);
+    const moved = new Set();
+
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      const currentIndex = indexRef.current.get(currentId);
+      if (currentIndex === undefined) continue;
+
+      const currentTopic = lookupRef.current.get(currentId);
+      if (!currentTopic) continue;
+
+      for (let i = 0; i < topicsRef.current.length; i += 1) {
+        if (i === currentIndex) continue;
+        const otherTopic = topicsRef.current[i];
+        const otherId = otherTopic.id;
+
+        const dx = otherTopic.position.x - currentTopic.position.x;
+        const dy = otherTopic.position.y - currentTopic.position.y;
+        let distance = Math.hypot(dx, dy);
+
+        if (distance < MIN_NODE_DISTANCE && distance > 0) {
+          const overlap = MIN_NODE_DISTANCE - distance;
+          const ux = dx / distance;
+          const uy = dy / distance;
+          const push = overlap / 2;
+
+          otherTopic.position = {
+            x: clampWithinCanvas(otherTopic.position.x + ux * push),
+            y: clampWithinCanvas(otherTopic.position.y + uy * push),
+          };
+
+          if (!originIds.has(currentId)) {
+            currentTopic.position = {
+              x: clampWithinCanvas(currentTopic.position.x - ux * push),
+              y: clampWithinCanvas(currentTopic.position.y - uy * push),
+            };
+            lookupRef.current.set(currentId, currentTopic);
+            topicsRef.current[currentIndex] = currentTopic;
+            updateVisualForTopic(currentId);
+            moved.add(currentId);
+            if (!processed.has(currentId)) {
+              queue.push(currentId);
+              processed.add(currentId);
+            }
+          }
+
+          lookupRef.current.set(otherId, otherTopic);
+          topicsRef.current[i] = otherTopic;
+          updateVisualForTopic(otherId);
+          moved.add(otherId);
+
+          if (!processed.has(otherId)) {
+            queue.push(otherId);
+            processed.add(otherId);
+          }
+        } else if (distance === 0) {
+          otherTopic.position = {
+            x: clampWithinCanvas(otherTopic.position.x + Math.random() * MIN_NODE_DISTANCE - MIN_NODE_DISTANCE / 2),
+            y: clampWithinCanvas(otherTopic.position.y + Math.random() * MIN_NODE_DISTANCE - MIN_NODE_DISTANCE / 2),
+          };
+          lookupRef.current.set(otherId, otherTopic);
+          topicsRef.current[i] = otherTopic;
+          updateVisualForTopic(otherId);
+          moved.add(otherId);
+          if (!processed.has(otherId)) {
+            queue.push(otherId);
+            processed.add(otherId);
+          }
+        }
+      }
+    }
+
+    return moved;
+  };
+
+  const rebuildStretchMap = (linkDefs, lookup) => {
+    const map = new Map();
+    linkDefs.forEach((link) => {
+      const source = lookup.get(link.source);
+      const target = lookup.get(link.target);
+      if (!source || !target) return;
+      const dx = source.position.x - target.position.x;
+      const dy = source.position.y - target.position.y;
+      const distance = Math.hypot(dx, dy);
       if (distance > MAX_LINK_LENGTH) {
-        const excess = distance - MAX_LINK_LENGTH;
-        const pull = Math.min(excess, STRETCH_BAND) * FOLLOW_FACTOR;
-        const directionX = dx / distance;
-        const directionY = dy / distance;
-
-        neighbor.position = {
-          x: clampWithinCanvas(neighbor.position.x + directionX * pull),
-          y: clampWithinCanvas(neighbor.position.y + directionY * pull),
-        };
-
-        lookupRef.current.set(neighborId, neighbor);
-        topicsRef.current[neighborIndex] = neighbor;
-        updateVisualForTopic(neighborId);
-        moved.add(neighborId);
-
-        if (!visited.has(neighborId)) {
-          visited.add(neighborId);
-          queue.push(neighborId);
+        const ratio = Math.max(0, Math.min(1, (distance - MAX_LINK_LENGTH) / STRETCH_BAND));
+        if (ratio > 0.001) {
+          map.set(link.id, ratio);
         }
       }
     });
-  }
+    return map;
+  };
 
-  return moved;
-};
-
-const clampWithinCanvas = (value) => Math.max(-CANVAS_EXTENT, Math.min(CANVAS_EXTENT, value));
-
-const resolveCollisions = (originIds, lookupRef, topicsRef, indexRef, updateVisualForTopic) => {
-  if (!originIds || originIds.size === 0) return new Set();
-
-  const queue = Array.from(originIds);
-  const processed = new Set(queue);
-  const moved = new Set();
-
-  while (queue.length > 0) {
-    const currentId = queue.shift();
-    const currentIndex = indexRef.current.get(currentId);
-    if (currentIndex === undefined) continue;
-
-    const currentTopic = lookupRef.current.get(currentId);
-    if (!currentTopic) continue;
-
-    for (let i = 0; i < topicsRef.current.length; i += 1) {
-      if (i === currentIndex) continue;
-      const otherTopic = topicsRef.current[i];
-      const otherId = otherTopic.id;
-
-      const dx = otherTopic.position.x - currentTopic.position.x;
-      const dy = otherTopic.position.y - currentTopic.position.y;
-      let distance = Math.hypot(dx, dy);
-
-      if (distance < MIN_NODE_DISTANCE && distance > 0) {
-        const overlap = MIN_NODE_DISTANCE - distance;
-        const ux = dx / distance;
-        const uy = dy / distance;
-        const push = overlap / 2;
-
-        otherTopic.position = {
-          x: clampWithinCanvas(otherTopic.position.x + ux * push),
-          y: clampWithinCanvas(otherTopic.position.y + uy * push),
-        };
-
-        if (!originIds.has(currentId)) {
-          currentTopic.position = {
-            x: clampWithinCanvas(currentTopic.position.x - ux * push),
-            y: clampWithinCanvas(currentTopic.position.y - uy * push),
-          };
-          lookupRef.current.set(currentId, currentTopic);
-          topicsRef.current[currentIndex] = currentTopic;
-          updateVisualForTopic(currentId);
-          moved.add(currentId);
-          if (!processed.has(currentId)) {
-            queue.push(currentId);
-            processed.add(currentId);
-          }
-        }
-
-        lookupRef.current.set(otherId, otherTopic);
-        topicsRef.current[i] = otherTopic;
-        updateVisualForTopic(otherId);
-        moved.add(otherId);
-
-        if (!processed.has(otherId)) {
-          queue.push(otherId);
-          processed.add(otherId);
-        }
-      } else if (distance === 0) {
-        otherTopic.position = {
-          x: clampWithinCanvas(otherTopic.position.x + Math.random() * MIN_NODE_DISTANCE - MIN_NODE_DISTANCE / 2),
-          y: clampWithinCanvas(otherTopic.position.y + Math.random() * MIN_NODE_DISTANCE - MIN_NODE_DISTANCE / 2),
-        };
-        lookupRef.current.set(otherId, otherTopic);
-        topicsRef.current[i] = otherTopic;
-        updateVisualForTopic(otherId);
-        moved.add(otherId);
-        if (!processed.has(otherId)) {
-          queue.push(otherId);
-          processed.add(otherId);
-        }
-      }
-    }
-  }
-
-  return moved;
-};
-
-const rebuildStretchMap = (linkDefs, lookup) => {
-  const map = new Map();
-  linkDefs.forEach((link) => {
-    const source = lookup.get(link.source);
-    const target = lookup.get(link.target);
-    if (!source || !target) return;
-    const dx = source.position.x - target.position.x;
-    const dy = source.position.y - target.position.y;
-    const distance = Math.hypot(dx, dy);
-    if (distance > MAX_LINK_LENGTH) {
-      const ratio = Math.max(0, Math.min(1, (distance - MAX_LINK_LENGTH) / STRETCH_BAND));
-      if (ratio > 0.001) {
-        map.set(link.id, ratio);
-      }
-    }
-  });
-  return map;
-};
-
+  /* --- Dragging a node (right click + drag) --- */
   const startNodeDrag = (topicId, event) => {
     if (event.button !== 2) return;
     event.preventDefault();
@@ -541,8 +507,8 @@ const rebuildStretchMap = (linkDefs, lookup) => {
 
     const handleMove = (moveEvent) => {
       moveEvent.preventDefault();
-      const dx = (moveEvent.clientX - startPointer.x) / zoom;
-      const dy = (moveEvent.clientY - startPointer.y) / zoom;
+      const dx = (moveEvent.clientX - startPointer.x) / zoomRef.current;
+      const dy = (moveEvent.clientY - startPointer.y) / zoomRef.current;
 
       topic.position = {
         x: clampWithinCanvas(startPos.x + dx),
@@ -554,7 +520,7 @@ const rebuildStretchMap = (linkDefs, lookup) => {
 
       const movedIds = pullConnected(topicId);
       movedIds.add(topicId);
-      const collisionMoves = resolveCollisions(movedIds, lookupRef, topicsRef, indexRef, updateVisualForTopic);
+      const collisionMoves = resolveCollisions(movedIds);
       collisionMoves.forEach((id) => movedIds.add(id));
 
       const stretchMap = rebuildStretchMap(linkDefs, lookupRef.current);
@@ -579,7 +545,7 @@ const rebuildStretchMap = (linkDefs, lookup) => {
         const stretchMap = rebuildStretchMap(linkDefs, lookupRef.current);
         updateStretchStyles(stretchMap);
         setTopics(nextTopics);
-        setPaths(computePaths(nextTopics, linkDefs));
+        setPaths(computePaths(nextTopics, linkDefs, 1));
       } else {
         topicsRef.current = cloneTopics(snapshot);
         lookupRef.current = buildLookup(topicsRef.current);
@@ -589,7 +555,7 @@ const rebuildStretchMap = (linkDefs, lookup) => {
         updateStretchStyles(stretchMap);
         const reverted = cloneTopics(snapshot);
         setTopics(reverted);
-        setPaths(computePaths(reverted, linkDefs));
+        setPaths(computePaths(reverted, linkDefs, 1));
       }
     };
 
@@ -607,6 +573,8 @@ const rebuildStretchMap = (linkDefs, lookup) => {
     window.addEventListener("pointerup", handleUp);
     window.addEventListener("pointercancel", handleCancel);
   };
+
+  /* ---------------- Render ---------------- */
 
   return (
     <section
@@ -677,7 +645,6 @@ const rebuildStretchMap = (linkDefs, lookup) => {
                     nodeRefs.current.set(topic.id, element);
                     element.style.left = `${topic.position.x}px`;
                     element.style.top = `${topic.position.y}px`;
-                    element.style.setProperty("--idle-delay", `${computeIdleDelay(topic.id)}s`);
                   } else {
                     nodeRefs.current.delete(topic.id);
                   }
@@ -706,7 +673,12 @@ const rebuildStretchMap = (linkDefs, lookup) => {
           onClick={() => setActiveTopic(null)}
         >
           <article className="knowledge-modal" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="knowledge-modal__close" onClick={() => setActiveTopic(null)} aria-label="Close topic details">
+            <button
+              type="button"
+              className="knowledge-modal__close"
+              onClick={() => setActiveTopic(null)}
+              aria-label="Close topic details"
+            >
               ×
             </button>
             <header>
