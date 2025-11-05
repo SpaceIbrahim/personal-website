@@ -1,591 +1,57 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import "./knowledgemap.css";
 import mapData from "../../data/knowledgeMap.json";
 
-const CANVAS_EXTENT = 4000;
-const NODE_RADIUS = 90;
-const MAX_LINK_LENGTH = 420;
-const STRETCH_BAND = 100;
-const FOLLOW_FACTOR = 0.45;
-const MIN_NODE_DISTANCE = 190;
+import useGraphState from "./hooks/useGraphState.jsx";
+import usePanZoom from "./hooks/usePanZoom.jsx";
+import useDragNodes from "./hooks/useDragNodes.jsx";
+import useStretchStyles from "./hooks/useStretchStyles.jsx";
+import { computeIdleDelay, computePaths } from "./graph/graphUtils.jsx";
 
-/* ---------------- Utilities ---------------- */
-
-const normalizeTopic = (topic) => {
-  if (!topic) return topic;
-  const detail = topic.detail || {};
-  const deepDives = Array.isArray(detail.deepDives) ? detail.deepDives : [];
-  const resources = Array.isArray(detail.resources) ? detail.resources : [];
-
-  const position = {
-    x: (topic.position?.x ?? 0) + (topic.anchor && topic.anchor !== "center" ? NODE_RADIUS : 0),
-    y: (topic.position?.y ?? 0) + (topic.anchor && topic.anchor !== "center" ? NODE_RADIUS : 0),
-  };
-
-  return {
-    ...topic,
-    anchor: "center",
-    position,
-    detail: {
-      overview: detail.overview || "",
-      deepDives,
-      resources,
-    },
-  };
-};
-
-const cloneTopics = (topics) =>
-  topics.map((topic) => ({
-    ...topic,
-    position: { ...topic.position },
-  }));
-
-const buildLookup = (topics) => {
-  const lookup = new Map();
-  topics.forEach((topic) => lookup.set(topic.id, topic));
-  return lookup;
-};
-
-const buildIndex = (topics) => {
-  const index = new Map();
-  topics.forEach((topic, idx) => index.set(topic.id, idx));
-  return index;
-};
-
-const buildAdjacency = (links) => {
-  const adjacency = new Map();
-  links.forEach((link) => {
-    if (!adjacency.has(link.source)) adjacency.set(link.source, []);
-    if (!adjacency.has(link.target)) adjacency.set(link.target, []);
-    adjacency.get(link.source).push(link);
-    adjacency.get(link.target).push(link);
-  });
-  return adjacency;
-};
-
-const clampWithinCanvas = (value) => Math.max(-CANVAS_EXTENT, Math.min(CANVAS_EXTENT, value));
-
-/* Compute a straight line path between two nodes with optional lane spacing. */
-const computeLinkPath = (link, lookup, options = {}) => {
-  const { laneSpacing = 1 } = options;
-  const source = lookup.get(link.source);
-  const target = lookup.get(link.target);
-  if (!source || !target) return null;
-
-  const x1 = source.position.x + CANVAS_EXTENT;
-  const y1 = source.position.y + CANVAS_EXTENT;
-  const x2 = target.position.x + CANVAS_EXTENT;
-  const y2 = target.position.y + CANVAS_EXTENT;
-
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const distance = Math.hypot(dx, dy) || 1;
-  const normalX = -dy / distance;
-  const normalY = dx / distance;
-
-  const baseOffset = link.laneCount > 1 ? (link.laneIndex - (link.laneCount - 1) / 2) * 18 : 0;
-  const laneOffset = baseOffset * laneSpacing;
-
-  const offsetX = normalX * laneOffset;
-  const offsetY = normalY * laneOffset;
-
-  const startX = x1 + offsetX;
-  const startY = y1 + offsetY;
-  const endX = x2 + offsetX;
-  const endY = y2 + offsetY;
-
-  return `M ${startX} ${startY} L ${endX} ${endY}`;
-};
-
-const computePaths = (topics, links, laneSpacing = 1) => {
-  const lookup = buildLookup(topics);
-  return links
-    .map((link) => {
-      const path = computeLinkPath(link, lookup, { laneSpacing });
-      if (!path) return null;
-      return { ...link, path };
-    })
-    .filter(Boolean);
-};
-
-/* ---------------- Component ---------------- */
-
-const KnowledgeMap = () => {
-  /* --- Refs FIRST (so nothing uses them before init) --- */
+export default function KnowledgeMap() {
   const mapRootRef = useRef(null);
   const viewportRef = useRef(null);
-  const pointerIdRef = useRef(null);
-
-  const topicsRef = useRef([]);
-  const lookupRef = useRef(new Map());
-  const indexRef = useRef(new Map());
-  const nodeRefs = useRef(new Map());
   const linkRefs = useRef(new Map());
-  const stretchStateRef = useRef(new Map());
-  const isDraggingRef = useRef(false);
-  const zoomRef = useRef(1);
+  const nodeRefs = useRef(new Map());
 
-  /* --- Derived data --- */
-  const initialTopics = useMemo(
-    () => cloneTopics((mapData.topics || []).map(normalizeTopic)),
-    []
-  );
+  const {
+    topics, setTopics, paths, setPaths, activeTopic, setActiveTopic,
+    linkDefs, adjacency, topicsRef, lookupRef, indexRef
+  } = useGraphState(mapData);
 
-  const linkDefs = useMemo(() => {
-    const groups = new Map();
-    (mapData.links || []).forEach((link, index) => {
-      const pairKey = [link.source, link.target].sort().join("__");
-      if (!groups.has(pairKey)) groups.set(pairKey, []);
-      groups.get(pairKey).push({ ...link, rawIndex: index });
-    });
+  const {
+    offset, zoom, isPanning,
+    onPointerDownCanvas, onPointerMoveCanvas, onPointerUpCanvas
+  } = usePanZoom(viewportRef);
 
-    const ordered = [];
-    groups.forEach((linksForPair) => {
-      linksForPair.sort((a, b) => a.rawIndex - b.rawIndex);
-      const count = linksForPair.length;
-      linksForPair.forEach((link, laneIndex) => {
-        ordered.push({
-          id: `${link.source}-${link.target}-${link.rawIndex}`,
-          source: link.source,
-          target: link.target,
-          laneIndex,
-          laneCount: count,
-          rawIndex: link.rawIndex,
-        });
-      });
-    });
+  const { updateStretchStyles } = useStretchStyles(linkRefs);
 
-    ordered.sort((a, b) => a.rawIndex - b.rawIndex);
-    return ordered.map(({ rawIndex, ...rest }) => rest);
-  }, []);
-
-  const adjacency = useMemo(() => buildAdjacency(linkDefs), [linkDefs]);
-
-  /* --- State --- */
-  const [topics, setTopics] = useState(initialTopics);
-  const [paths, setPaths] = useState(() => computePaths(initialTopics, linkDefs, 1));
-  const [activeTopic, setActiveTopic] = useState(null);
-  const [isPanning, setIsPanning] = useState(false);
-  const [origin, setOrigin] = useState({ x: 0, y: 0 });
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  /* Keep refs in sync with state */
-  useEffect(() => {
-    const cloned = cloneTopics(topics);
-    topicsRef.current = cloned;
-    lookupRef.current = buildLookup(cloned);
-    indexRef.current = buildIndex(cloned);
-  }, [topics]);
+  const { startNodeDrag } = useDragNodes({
+    zoom, linkDefs, adjacency, topicsRef, lookupRef, indexRef,
+    setTopics, setPaths, linkRefs, nodeRefs, updateStretchStyles
+  });
 
   useEffect(() => {
-    zoomRef.current = zoom;
-  }, [zoom]);
+    setPaths(computePaths(topics, linkDefs));
+  }, [topics, linkDefs, setPaths]);
 
-  /* Center initial view */
-  useLayoutEffect(() => {
-    if (isInitialized || !viewportRef.current) return;
-    const rect = viewportRef.current.getBoundingClientRect();
-    setOffset({ x: rect.width / 2, y: rect.height / 2 });
-    setIsInitialized(true);
-  }, [isInitialized]);
-
-  /* Zoom with mouse wheel (cursor-centered zoom) */
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const handleWheel = (event) => {
-      event.preventDefault();
-
-      const scaleFactor = event.deltaY > 0 ? 0.9 : 1.1;
-      const nextZoom = Math.min(Math.max(zoom * scaleFactor, 0.5), 2.4);
-      if (nextZoom === zoom) return;
-
-      const rect = viewport.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-
-      const worldX = (mouseX - offset.x) / zoom;
-      const worldY = (mouseY - offset.y) / zoom;
-
-      setZoom(nextZoom);
-      setOffset({
-        x: mouseX - worldX * nextZoom,
-        y: mouseY - worldY * nextZoom,
-      });
-    };
-
-    viewport.addEventListener("wheel", handleWheel, { passive: false });
-    return () => viewport.removeEventListener("wheel", handleWheel);
-  }, [offset, zoom]);
-
-  /* Modal focus/escape + page scroll lock */
-  useEffect(() => {
-    if (!activeTopic) {
-      document.body.style.overflow = "";
-      return undefined;
-    }
+    if (!activeTopic) { document.body.style.overflow = ""; return; }
     document.body.style.overflow = "hidden";
-    const handleEsc = (event) => {
-      if (event.key === "Escape") setActiveTopic(null);
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => {
-      window.removeEventListener("keydown", handleEsc);
-      document.body.style.overflow = "";
-    };
-  }, [activeTopic]);
-
-  /* --- Panning handlers --- */
-  const handlePointerDown = (event) => {
-    if (event.button !== 0) return;
-    if (event.target.closest(".knowledge-node")) return;
-
-    setIsPanning(true);
-    setOrigin({ x: event.clientX - offset.x, y: event.clientY - offset.y });
-    pointerIdRef.current = event.pointerId;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-  };
-
-  const handlePointerMove = (event) => {
-    if (!isPanning || pointerIdRef.current !== event.pointerId) return;
-    setOffset({ x: event.clientX - origin.x, y: event.clientY - origin.y });
-  };
-
-  const handlePointerUp = (event) => {
-    if (pointerIdRef.current !== event.pointerId) return;
-    pointerIdRef.current = null;
-    setIsPanning(false);
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  };
-
-  const handlePointerCancel = (event) => {
-    if (pointerIdRef.current !== event.pointerId) return;
-    pointerIdRef.current = null;
-    setIsPanning(false);
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  };
-
-  /* --- Topic / link helpers --- */
-  const handleTopicClick = (topic) => setActiveTopic(topic);
-
-  const updateStretchStyles = (activeMap) => {
-    const prev = stretchStateRef.current;
-
-    // Remove no-longer-stretched
-    prev.forEach((_, id) => {
-      if (!activeMap.has(id)) {
-        const el = linkRefs.current.get(id);
-        if (el) {
-          el.style.removeProperty("--stretch");
-          el.classList.remove("knowledge-link--stretched");
-        }
-      }
-    });
-
-    // Apply current stretch
-    activeMap.forEach((ratio, id) => {
-      const el = linkRefs.current.get(id);
-      if (el) {
-        el.style.setProperty("--stretch", ratio.toFixed(3));
-        el.classList.add("knowledge-link--stretched");
-      }
-    });
-
-    stretchStateRef.current = activeMap;
-  };
-
-  const toggleDraggingVisual = (topicId, active, pointerId, target) => {
-    const nodeEl = nodeRefs.current.get(topicId);
-    if (nodeEl) {
-      nodeEl.classList.toggle("knowledge-node--dragging", active);
-      if (pointerId != null) {
-        if (active) nodeEl.setPointerCapture?.(pointerId);
-        else nodeEl.releasePointerCapture?.(pointerId);
-      }
-    }
-    if (target && !active) target.releasePointerCapture?.(pointerId);
-
-    mapRootRef.current?.classList.toggle("knowledge-map--dragging", active);
-    isDraggingRef.current = active;
-  };
-
-  const updateVisualForTopic = (topicId) => {
-    const index = indexRef.current.get(topicId);
-    if (index === undefined) return;
-
-    const topic = topicsRef.current[index];
-    const nodeEl = nodeRefs.current.get(topicId);
-    if (nodeEl) {
-      nodeEl.style.left = `${topic.position.x}px`;
-      nodeEl.style.top = `${topic.position.y}px`;
-    }
-
-    const connected = adjacency.get(topicId) || [];
-    connected.forEach((link) => {
-      const pathEl = linkRefs.current.get(link.id);
-      if (!pathEl) return;
-      const path = computeLinkPath(link, lookupRef.current, { laneSpacing: 1 });
-      if (path) pathEl.setAttribute("d", path);
-    });
-  };
-
-  const pullConnected = (rootId) => {
-    const visited = new Set([rootId]);
-    const queue = [rootId];
-    const processedLinks = new Set();
-    const moved = new Set();
-
-    while (queue.length > 0) {
-      const currentId = queue.shift();
-      const current = lookupRef.current.get(currentId);
-      if (!current) continue;
-
-      const neighbors = adjacency.get(currentId) || [];
-      neighbors.forEach((link) => {
-        if (processedLinks.has(link.id)) return;
-        processedLinks.add(link.id);
-
-        const neighborId = link.source === currentId ? link.target : link.source;
-        const neighborIndex = indexRef.current.get(neighborId);
-        const neighbor = neighborIndex !== undefined ? lookupRef.current.get(neighborId) : null;
-        if (!neighbor) return;
-
-        const dx = current.position.x - neighbor.position.x;
-        const dy = current.position.y - neighbor.position.y;
-        const distance = Math.hypot(dx, dy) || 1;
-
-        if (distance > MAX_LINK_LENGTH) {
-          const excess = distance - MAX_LINK_LENGTH;
-          const pull = Math.min(excess, STRETCH_BAND) * FOLLOW_FACTOR;
-          const directionX = dx / distance;
-          const directionY = dy / distance;
-
-          neighbor.position = {
-            x: clampWithinCanvas(neighbor.position.x + directionX * pull),
-            y: clampWithinCanvas(neighbor.position.y + directionY * pull),
-          };
-
-          lookupRef.current.set(neighborId, neighbor);
-          topicsRef.current[neighborIndex] = neighbor;
-          updateVisualForTopic(neighborId);
-          moved.add(neighborId);
-
-          if (!visited.has(neighborId)) {
-            visited.add(neighborId);
-            queue.push(neighborId);
-          }
-        }
-      });
-    }
-
-    return moved;
-  };
-
-  const resolveCollisions = (originIds) => {
-    if (!originIds || originIds.size === 0) return new Set();
-
-    const queue = Array.from(originIds);
-    const processed = new Set(queue);
-    const moved = new Set();
-
-    while (queue.length > 0) {
-      const currentId = queue.shift();
-      const currentIndex = indexRef.current.get(currentId);
-      if (currentIndex === undefined) continue;
-
-      const currentTopic = lookupRef.current.get(currentId);
-      if (!currentTopic) continue;
-
-      for (let i = 0; i < topicsRef.current.length; i += 1) {
-        if (i === currentIndex) continue;
-        const otherTopic = topicsRef.current[i];
-        const otherId = otherTopic.id;
-
-        const dx = otherTopic.position.x - currentTopic.position.x;
-        const dy = otherTopic.position.y - currentTopic.position.y;
-        let distance = Math.hypot(dx, dy);
-
-        if (distance < MIN_NODE_DISTANCE && distance > 0) {
-          const overlap = MIN_NODE_DISTANCE - distance;
-          const ux = dx / distance;
-          const uy = dy / distance;
-          const push = overlap / 2;
-
-          otherTopic.position = {
-            x: clampWithinCanvas(otherTopic.position.x + ux * push),
-            y: clampWithinCanvas(otherTopic.position.y + uy * push),
-          };
-
-          if (!originIds.has(currentId)) {
-            currentTopic.position = {
-              x: clampWithinCanvas(currentTopic.position.x - ux * push),
-              y: clampWithinCanvas(currentTopic.position.y - uy * push),
-            };
-            lookupRef.current.set(currentId, currentTopic);
-            topicsRef.current[currentIndex] = currentTopic;
-            updateVisualForTopic(currentId);
-            moved.add(currentId);
-            if (!processed.has(currentId)) {
-              queue.push(currentId);
-              processed.add(currentId);
-            }
-          }
-
-          lookupRef.current.set(otherId, otherTopic);
-          topicsRef.current[i] = otherTopic;
-          updateVisualForTopic(otherId);
-          moved.add(otherId);
-
-          if (!processed.has(otherId)) {
-            queue.push(otherId);
-            processed.add(otherId);
-          }
-        } else if (distance === 0) {
-          otherTopic.position = {
-            x: clampWithinCanvas(otherTopic.position.x + Math.random() * MIN_NODE_DISTANCE - MIN_NODE_DISTANCE / 2),
-            y: clampWithinCanvas(otherTopic.position.y + Math.random() * MIN_NODE_DISTANCE - MIN_NODE_DISTANCE / 2),
-          };
-          lookupRef.current.set(otherId, otherTopic);
-          topicsRef.current[i] = otherTopic;
-          updateVisualForTopic(otherId);
-          moved.add(otherId);
-          if (!processed.has(otherId)) {
-            queue.push(otherId);
-            processed.add(otherId);
-          }
-        }
-      }
-    }
-
-    return moved;
-  };
-
-  const rebuildStretchMap = (linkDefs, lookup) => {
-    const map = new Map();
-    linkDefs.forEach((link) => {
-      const source = lookup.get(link.source);
-      const target = lookup.get(link.target);
-      if (!source || !target) return;
-      const dx = source.position.x - target.position.x;
-      const dy = source.position.y - target.position.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance > MAX_LINK_LENGTH) {
-        const ratio = Math.max(0, Math.min(1, (distance - MAX_LINK_LENGTH) / STRETCH_BAND));
-        if (ratio > 0.001) {
-          map.set(link.id, ratio);
-        }
-      }
-    });
-    return map;
-  };
-
-  /* --- Dragging a node (right click + drag) --- */
-  const startNodeDrag = (topicId, event) => {
-    if (event.button !== 2) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    const index = indexRef.current.get(topicId);
-    if (index === undefined) return;
-
-    const nodeEl = nodeRefs.current.get(topicId);
-    const pointerId = event.pointerId;
-    nodeEl?.setPointerCapture?.(pointerId);
-
-    const topic = topicsRef.current[index];
-    const startPointer = { x: event.clientX, y: event.clientY };
-    const startPos = { ...topic.position };
-    const snapshot = cloneTopics(topicsRef.current);
-
-    toggleDraggingVisual(topicId, true, pointerId, nodeEl);
-
-    let finished = false;
-
-    const handleMove = (moveEvent) => {
-      moveEvent.preventDefault();
-      const dx = (moveEvent.clientX - startPointer.x) / zoomRef.current;
-      const dy = (moveEvent.clientY - startPointer.y) / zoomRef.current;
-
-      topic.position = {
-        x: clampWithinCanvas(startPos.x + dx),
-        y: clampWithinCanvas(startPos.y + dy),
-      };
-      lookupRef.current.set(topicId, topic);
-      topicsRef.current[index] = topic;
-      updateVisualForTopic(topicId);
-
-      const movedIds = pullConnected(topicId);
-      movedIds.add(topicId);
-      const collisionMoves = resolveCollisions(movedIds);
-      collisionMoves.forEach((id) => movedIds.add(id));
-
-      const stretchMap = rebuildStretchMap(linkDefs, lookupRef.current);
-      updateStretchStyles(stretchMap);
-    };
-
-    const finishDrag = (commit) => {
-      if (finished) return;
-      finished = true;
-
-      toggleDraggingVisual(topicId, false, pointerId, nodeEl);
-
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-      window.removeEventListener("pointercancel", handleCancel);
-
-      if (commit) {
-        const nextTopics = cloneTopics(topicsRef.current);
-        topicsRef.current = cloneTopics(nextTopics);
-        lookupRef.current = buildLookup(topicsRef.current);
-        indexRef.current = buildIndex(topicsRef.current);
-        const stretchMap = rebuildStretchMap(linkDefs, lookupRef.current);
-        updateStretchStyles(stretchMap);
-        setTopics(nextTopics);
-        setPaths(computePaths(nextTopics, linkDefs, 1));
-      } else {
-        topicsRef.current = cloneTopics(snapshot);
-        lookupRef.current = buildLookup(topicsRef.current);
-        indexRef.current = buildIndex(topicsRef.current);
-        topicsRef.current.forEach((item) => updateVisualForTopic(item.id));
-        const stretchMap = rebuildStretchMap(linkDefs, lookupRef.current);
-        updateStretchStyles(stretchMap);
-        const reverted = cloneTopics(snapshot);
-        setTopics(reverted);
-        setPaths(computePaths(reverted, linkDefs, 1));
-      }
-    };
-
-    const handleUp = (upEvent) => {
-      upEvent.preventDefault();
-      finishDrag(true);
-    };
-
-    const handleCancel = (cancelEvent) => {
-      cancelEvent.preventDefault();
-      finishDrag(false);
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    window.addEventListener("pointercancel", handleCancel);
-  };
-
-  /* ---------------- Render ---------------- */
+    const onEsc = (e) => { if (e.key === "Escape") setActiveTopic(null); };
+    window.addEventListener("keydown", onEsc);
+    return () => { window.removeEventListener("keydown", onEsc); document.body.style.overflow = ""; };
+  }, [activeTopic, setActiveTopic]);
 
   return (
     <section
       className="knowledge-map"
       id="knowledge"
       ref={mapRootRef}
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <header className="knowledge-map__chrome">
         <a className="knowledge-map__home" href="/">← Back Home</a>
-
         <div className="knowledge-map__hint">
           Drag canvas with left click · Scroll to zoom · Left click opens · Right click + drag moves a node
         </div>
@@ -594,10 +60,9 @@ const KnowledgeMap = () => {
       <div
         className="knowledge-map__viewport"
         ref={viewportRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
+        onPointerDown={onPointerDownCanvas}
+        onPointerMove={onPointerMoveCanvas}
+        onPointerUp={onPointerUpCanvas}
       >
         <div
           className="knowledge-map__canvas"
@@ -608,10 +73,10 @@ const KnowledgeMap = () => {
         >
           <svg
             className="knowledge-map__links"
-            viewBox={`0 0 ${CANVAS_EXTENT * 2} ${CANVAS_EXTENT * 2}`}
-            width={CANVAS_EXTENT * 2}
-            height={CANVAS_EXTENT * 2}
-            style={{ left: -CANVAS_EXTENT, top: -CANVAS_EXTENT }}
+            viewBox="0 0 8000 8000"
+            width={8000}
+            height={8000}
+            style={{ left: -4000, top: -4000 }}
             aria-hidden="true"
           >
             <defs>
@@ -623,12 +88,9 @@ const KnowledgeMap = () => {
             {paths.map((line) => (
               <path
                 key={line.id}
-                ref={(element) => {
-                  if (element) {
-                    linkRefs.current.set(line.id, element);
-                  } else {
-                    linkRefs.current.delete(line.id);
-                  }
+                ref={(el) => {
+                  if (el) linkRefs.current.set(line.id, el);
+                  else linkRefs.current.delete(line.id);
                 }}
                 d={line.path}
                 className="knowledge-link"
@@ -640,20 +102,18 @@ const KnowledgeMap = () => {
             {topics.map((topic) => (
               <button
                 key={topic.id}
-                ref={(element) => {
-                  if (element) {
-                    nodeRefs.current.set(topic.id, element);
-                    element.style.left = `${topic.position.x}px`;
-                    element.style.top = `${topic.position.y}px`;
-                  } else {
-                    nodeRefs.current.delete(topic.id);
-                  }
+                ref={(el) => {
+                  if (!el) { nodeRefs.current.delete(topic.id); return; }
+                  nodeRefs.current.set(topic.id, el);
+                  el.style.left = `${topic.position.x}px`;
+                  el.style.top = `${topic.position.y}px`;
+                  el.style.setProperty("--idle-delay", `${computeIdleDelay(topic.id)}s`);
                 }}
                 className={`knowledge-node ${activeTopic?.id === topic.id ? "knowledge-node--active" : ""}`}
                 type="button"
-                onClick={() => handleTopicClick(topic)}
-                onPointerDown={(event) => startNodeDrag(topic.id, event)}
-                onContextMenu={(event) => event.preventDefault()}
+                onClick={() => setActiveTopic(topic)}
+                onPointerDown={(e) => startNodeDrag(topic.id, e)}
+                onContextMenu={(e) => e.preventDefault()}
               >
                 <span className="knowledge-node__inner">
                   <span className="knowledge-node__title">{topic.label}</span>
@@ -672,7 +132,7 @@ const KnowledgeMap = () => {
           aria-labelledby={`topic-${activeTopic.id}`}
           onClick={() => setActiveTopic(null)}
         >
-          <article className="knowledge-modal" onClick={(event) => event.stopPropagation()}>
+          <article className="knowledge-modal" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               className="knowledge-modal__close"
@@ -711,6 +171,4 @@ const KnowledgeMap = () => {
       )}
     </section>
   );
-};
-
-export default KnowledgeMap;
+}

@@ -201,7 +201,7 @@
   stroke-width: calc(4.8 + var(--stretch, 0) * 4);
   stroke-linecap: round;
   opacity: 0.9;
-  transition: d 0.18s ease-out, stroke-width 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
+  transition: stroke-width 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
   filter: drop-shadow(0 0 calc(12px + var(--stretch, 0) * 18px) rgba(255, 215, 0, 0.25));
 }
 
