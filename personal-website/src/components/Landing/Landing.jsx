@@ -1,7 +1,7 @@
 import "./landing.css";
 import ibrahim from "../../assets/ibrahim.png";
 import { Link } from "react-scroll";
-import { FaFacebook, FaTwitter, FaFileAlt } from "react-icons/fa";
+import { FaDiscord, FaTwitter, FaFileAlt } from "react-icons/fa";
 import { TiSocialInstagram, TiSocialLinkedin } from "react-icons/ti";
 
 const Landing = () => {
@@ -31,15 +31,17 @@ const Landing = () => {
           <div className="intro-image-circle"></div>
           <div className="social-links">
             {[
-              { icon: FaFacebook, label: "Facebook", href: "#" },
+              { icon: FaDiscord, label: "Discord", href: "https://discordapp.com/users/SpaceIbrahim" },
               { icon: FaTwitter, label: "Twitter", href: "#" },
-              { icon: TiSocialLinkedin, label: "LinkedIn", href: "#" },
-              { icon: TiSocialInstagram, label: "Instagram", href: "#" },
+              { icon: TiSocialLinkedin, label: "LinkedIn", href: "https://www.linkedin.com/in/muhammad-ibrahim-541225226/" },
+              { icon: TiSocialInstagram, label: "Instagram", href: "https://www.instagram.com/ibrahimm4566/" },
             ].map((social) => (
               <a 
                 key={social.label}
                 href={social.href}
                 aria-label={social.label}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <social.icon />
               </a>
