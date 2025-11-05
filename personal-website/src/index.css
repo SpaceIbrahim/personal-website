@@ -7,6 +7,6 @@
 }
 
 body {
-  background: rgb(30, 30, 30);
+  background: linear-gradient(110deg, #1e1e1e 0%, #0c0c0c 100%);
   color: white;
 }
