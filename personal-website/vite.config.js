@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         knowledge: resolve(__dirname, 'knowledge.html'),
+        gallery: resolve(__dirname, 'gallery.html'),
       },
     },
   },

@@ -84,6 +84,9 @@ const Navbar = () => {
         <a className="nav-item" href="/knowledge.html">
           Knowledge Map
         </a>
+        <a className="nav-item" href="/gallery.html">
+          Gallery
+        </a>
       </div>
 
       <button type="button" className="nav-contact" onClick={handleContactClick}>
