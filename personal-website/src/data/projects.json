@@ -1,0 +1,89 @@
+[
+  {
+    "id": "portfolio-redesign",
+    "title": "Portfolio Redesign",
+    "headline": "Responsive React + Vite portfolio focused on performance and storytelling.",
+    "description": "A complete overhaul of my personal portfolio with component-driven design, subtle motion, and accessibility baked in from the start.",
+    "mainImage": {
+      "type": "placeholder",
+      "width": 960,
+      "height": 540,
+      "label": "Portfolio UI",
+      "gradient": ["#1f1f1f", "#0d0d0d"]
+    },
+    "thumbnail": {
+      "type": "placeholder",
+      "width": 320,
+      "height": 320,
+      "label": "Style Guide",
+      "gradient": ["#ffd700", "#e1a403"]
+    },
+    "highlights": [
+      "Dynamic sections driven by JSON content for quick updates",
+      "Lightweight animation system using IntersectionObserver",
+      "Automated Lighthouse audits on every commit via GitHub Actions"
+    ],
+    "tech": ["React", "Vite", "Framer Motion", "Styled Components"],
+    "links": [
+      { "label": "View Case Study", "href": "#" },
+      { "label": "Live Site", "href": "#" }
+    ]
+  },
+  {
+    "id": "iot-dashboard",
+    "title": "IoT Device Dashboard",
+    "headline": "Real-time monitoring dashboard aggregating sensor data from edge devices.",
+    "description": "Designed a modular analytics dashboard where new device types can be onboarded via config, unlocking fast experimentation.",
+    "mainImage": {
+      "type": "placeholder",
+      "width": 960,
+      "height": 540,
+      "label": "IoT Dashboard",
+      "gradient": ["#0f2027", "#203a43"]
+    },
+    "thumbnail": {
+      "type": "placeholder",
+      "width": 280,
+      "height": 280,
+      "label": "Live Metrics",
+      "gradient": ["#2c5364", "#0f2027"]
+    },
+    "highlights": [
+      "WebSocket data ingestion with intelligent batching and caching",
+      "Role-based layouts so operators and engineers see the right KPIs",
+      "Exportable deep-dive reports with CSV and PDF pipelines"
+    ],
+    "tech": ["React", "Recharts", "Node.js", "Socket.IO"],
+    "links": [{ "label": "Product Overview", "href": "#" }]
+  },
+  {
+    "id": "campus-nav",
+    "title": "Campus Navigator",
+    "headline": "Mobile-first progressive web app that guides students across campus.",
+    "description": "Built around offline-first principles to keep navigation available even when cell service is spotty between buildings.",
+    "mainImage": {
+      "type": "placeholder",
+      "width": 960,
+      "height": 540,
+      "label": "Campus Map",
+      "gradient": ["#141e30", "#243b55"]
+    },
+    "thumbnail": {
+      "type": "placeholder",
+      "width": 260,
+      "height": 260,
+      "label": "Route Planner",
+      "gradient": ["#ffd700", "#f7971e"]
+    },
+    "highlights": [
+      "Turn-by-turn guidance with accessible voice cues and haptics",
+      "Crowdsourced accessibility notes for elevators, ramps, and obstacles",
+      "App shell caching that keeps core features working offline"
+    ],
+    "tech": ["React", "Leaflet", "Workbox", "Mapbox"],
+    "links": [
+      { "label": "Download Prototype", "href": "#" },
+      { "label": "Design Files", "href": "#" }
+    ]
+  }
+]
